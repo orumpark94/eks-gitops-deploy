@@ -1,32 +1,76 @@
 provider "aws" {
-    region = var.aws_region
+    region = "ap-northeast-2"
   }
   
-  # Default VPC 참조
-  data "aws_vpc" "default" {
-    default = true
-  }
+  # ✅ 새 VPC 생성
+  resource "aws_vpc" "eks_vpc" {
+    cidr_block           = "10.0.0.0/16"
+    enable_dns_support   = true
+    enable_dns_hostnames = true
   
-  # Default VPC에 연결된 모든 서브넷 자동 수집
-  data "aws_subnets" "selected" {
-    filter {
-      name   = "vpc-id"
-      values = [data.aws_vpc.default.id]
+    tags = {
+      Name = "eks-vpc"
     }
   }
   
-  # 이미 존재하는 EKS 클러스터용 IAM Role 참조
-  data "aws_iam_role" "eks_cluster_role" {
-    name = var.cluster_role_name
+  # ✅ 퍼블릭 서브넷 2개 생성 (다른 AZ에 배포)
+  resource "aws_subnet" "public_subnet_a" {
+    vpc_id            = aws_vpc.eks_vpc.id
+    cidr_block        = "10.0.1.0/24"
+    availability_zone = "ap-northeast-2a"
+  
+    tags = {
+      Name = "eks-public-a"
+    }
   }
   
-  # EKS 클러스터 생성
+  resource "aws_subnet" "public_subnet_c" {
+    vpc_id            = aws_vpc.eks_vpc.id
+    cidr_block        = "10.0.2.0/24"
+    availability_zone = "ap-northeast-2c"
+  
+    tags = {
+      Name = "eks-public-c"
+    }
+  }
+  
+  # ✅ IAM Role for EKS Cluster
+  resource "aws_iam_role" "eks_cluster_role" {
+    name = "eksClusterRole"
+  
+    assume_role_policy = jsonencode({
+      Version = "2012-10-17",
+      Statement = [
+        {
+          Effect = "Allow",
+          Principal = {
+            Service = "eks.amazonaws.com"
+          },
+          Action = "sts:AssumeRole"
+        }
+      ]
+    })
+  }
+  
+  resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+    role       = aws_iam_role.eks_cluster_role.name
+    policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+  }
+  
+  # ✅ EKS Cluster
   resource "aws_eks_cluster" "eks_cluster" {
-    name     = var.cluster_name
-    role_arn = data.aws_iam_role.eks_cluster_role.arn
+    name     = "eks-gitops-cluster"
+    role_arn = aws_iam_role.eks_cluster_role.arn
   
     vpc_config {
-      subnet_ids = data.aws_subnets.selected.ids
+      subnet_ids = [
+        aws_subnet.public_subnet_a.id,
+        aws_subnet.public_subnet_c.id
+      ]
     }
+  
+    depends_on = [
+      aws_iam_role_policy_attachment.eks_cluster_policy
+    ]
   }
   

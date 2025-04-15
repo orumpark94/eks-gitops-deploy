@@ -1,14 +1,12 @@
 variable "aws_region" {
-  description = "AWS region to deploy EKS"
-  type        = string
+  type    = string
+  default = "ap-northeast-2"
 }
 
 variable "cluster_name" {
-  description = "Name of EKS Cluster"
-  type        = string
+  type = string
 }
 
 variable "cluster_role_name" {
-  description = "IAM Role name for EKS (already exists)"
-  type        = string
+  type = string
 }
