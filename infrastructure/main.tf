@@ -2,35 +2,36 @@ provider "aws" {
     region = "ap-northeast-2"
   }
   
-  # ✅ 새 VPC 생성
-  resource "aws_vpc" "eks_vpc" {
-    cidr_block           = "10.0.0.0/16"
-    enable_dns_support   = true
-    enable_dns_hostnames = true
-  
-    tags = {
-      Name = "eks-vpc"
+  # ✅ 기존 VPC 재사용
+  data "aws_vpc" "eks_vpc" {
+    filter {
+      name   = "tag:Name"
+      values = ["eks-vpc"]
     }
   }
   
-  # ✅ 퍼블릭 서브넷 2개 생성
-  resource "aws_subnet" "public_subnet_a" {
-    vpc_id            = aws_vpc.eks_vpc.id
-    cidr_block        = "10.0.1.0/24"
-    availability_zone = "ap-northeast-2a"
+  # ✅ 기존 Subnet 재사용 (각 AZ)
+  data "aws_subnet" "public_subnet_a" {
+    filter {
+      name   = "tag:Name"
+      values = ["eks-public-a"]
+    }
   
-    tags = {
-      Name = "eks-public-a"
+    filter {
+      name   = "vpc-id"
+      values = [data.aws_vpc.eks_vpc.id]
     }
   }
   
-  resource "aws_subnet" "public_subnet_c" {
-    vpc_id            = aws_vpc.eks_vpc.id
-    cidr_block        = "10.0.2.0/24"
-    availability_zone = "ap-northeast-2c"
+  data "aws_subnet" "public_subnet_c" {
+    filter {
+      name   = "tag:Name"
+      values = ["eks-public-c"]
+    }
   
-    tags = {
-      Name = "eks-public-c"
+    filter {
+      name   = "vpc-id"
+      values = [data.aws_vpc.eks_vpc.id]
     }
   }
   
@@ -52,8 +53,8 @@ provider "aws" {
   
     vpc_config {
       subnet_ids = [
-        aws_subnet.public_subnet_a.id,
-        aws_subnet.public_subnet_c.id
+        data.aws_subnet.public_subnet_a.id,
+        data.aws_subnet.public_subnet_c.id
       ]
     }
   
