@@ -2,36 +2,36 @@ provider "aws" {
     region = "ap-northeast-2"
   }
   
-  # ✅ 기존 VPC 재사용
-  data "aws_vpc" "eks_vpc" {
-    filter {
-      name   = "tag:Name"
-      values = ["eks-vpc"]
+  # ✅ VPC (존재하면 import, 없으면 생성)
+  resource "aws_vpc" "eks_vpc" {
+    cidr_block           = "10.0.0.0/16"
+    enable_dns_support   = true
+    enable_dns_hostnames = true
+  
+    tags = {
+      Name = "eks-vpc"
     }
   }
   
-  # ✅ 기존 Subnet 재사용 (각 AZ)
-  data "aws_subnet" "public_subnet_a" {
-    filter {
-      name   = "tag:Name"
-      values = ["eks-public-a"]
-    }
+  # ✅ 퍼블릭 서브넷 A (AZ: 2a)
+  resource "aws_subnet" "public_subnet_a" {
+    vpc_id            = aws_vpc.eks_vpc.id
+    cidr_block        = "10.0.1.0/24"
+    availability_zone = "ap-northeast-2a"
   
-    filter {
-      name   = "vpc-id"
-      values = [data.aws_vpc.eks_vpc.id]
+    tags = {
+      Name = "eks-public-a"
     }
   }
   
-  data "aws_subnet" "public_subnet_c" {
-    filter {
-      name   = "tag:Name"
-      values = ["eks-public-c"]
-    }
+  # ✅ 퍼블릭 서브넷 C (AZ: 2c)
+  resource "aws_subnet" "public_subnet_c" {
+    vpc_id            = aws_vpc.eks_vpc.id
+    cidr_block        = "10.0.2.0/24"
+    availability_zone = "ap-northeast-2c"
   
-    filter {
-      name   = "vpc-id"
-      values = [data.aws_vpc.eks_vpc.id]
+    tags = {
+      Name = "eks-public-c"
     }
   }
   
@@ -40,7 +40,7 @@ provider "aws" {
     name = "eksClusterRole"
   }
   
-  # ✅ (선택) 정책 연결 - 이미 붙어 있다면 생략 가능
+  # ✅ 정책 연결 (필요 시)
   resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
     role       = data.aws_iam_role.eks_cluster_role.name
     policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
@@ -53,8 +53,8 @@ provider "aws" {
   
     vpc_config {
       subnet_ids = [
-        data.aws_subnet.public_subnet_a.id,
-        data.aws_subnet.public_subnet_c.id
+        aws_subnet.public_subnet_a.id,
+        aws_subnet.public_subnet_c.id
       ]
     }
   
