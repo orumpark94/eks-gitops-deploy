@@ -1,23 +1,14 @@
 variable "aws_region" {
-  description = "AWS region"
+  description = "AWS region to deploy EKS"
   type        = string
-  default     = "ap-northeast-2"
 }
 
 variable "cluster_name" {
-  description = "EKS cluster name"
+  description = "Name of EKS Cluster"
   type        = string
-  default     = "eks-gitops-cluster"
 }
 
-variable "cluster_role_arn" {
-  description = "IAM role ARN for the EKS cluster"
+variable "cluster_role_name" {
+  description = "IAM Role name for EKS (already exists)"
   type        = string
-  default     = ""
-}
-
-variable "subnet_ids" {
-  description = "List of subnet IDs for EKS"
-  type        = list(string)
-  default     = []
 }
