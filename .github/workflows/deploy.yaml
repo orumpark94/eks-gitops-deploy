@@ -34,7 +34,7 @@ jobs:
 
       - name: Ensure S3 bucket exists for Terraform state
         run: |
-          BUCKET_NAME="eks-gitops-tfstate-20250415
+          BUCKET_NAME="eks-gitops-tfstate-20250415"
           REGION="ap-northeast-2"
           
           if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
