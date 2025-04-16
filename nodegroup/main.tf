@@ -79,7 +79,7 @@ resource "aws_eks_node_group" "worker_group" {
     data.terraform_remote_state.vpc.outputs.public_subnet_c_id
   ]
 
-  instance_types = ["t3.micro"]
+  instance_types = ["t2.micro"]
 
   scaling_config {
     desired_size = 2
