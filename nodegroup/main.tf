@@ -101,7 +101,7 @@ resource "aws_iam_instance_profile" "worker_node_instance_profile" {
 # ✅ EC2 인스턴스 생성 (SSM 연결 전용)
 resource "aws_instance" "eks_worker" {
   ami                         = data.aws_ami.eks_node.id  # ✅ 자동 조회된 AMI 사용
-  instance_type               = "t3.micro"
+  instance_type               = "t2.nano"
   subnet_id                   = data.terraform_remote_state.vpc.outputs.public_subnet_a_id
   iam_instance_profile        = aws_iam_instance_profile.worker_node_instance_profile.name
   associate_public_ip_address = false   # 내부 전용 인스턴스
