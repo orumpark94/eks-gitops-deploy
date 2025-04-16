@@ -41,14 +41,15 @@ resource "aws_iam_role" "worker_node_role" {
   })
 }
 
-# ✅ 실제 사용할 Role의 ARN (기존 or 새로 생성된 것 중에서)
+# ✅ 실제 사용할 Role의 ARN (삼항 연산자 제거 → 조건 분기된 두 개의 locals)
 locals {
-  worker_node_role_arn = local.use_existing_role
-    ? data.aws_iam_roles.all_roles.arns[0]
-    : aws_iam_role.worker_node_role[0].arn
+  existing_role_arn = try(data.aws_iam_roles.all_roles.arns[0], null)
+  new_role_arn      = try(aws_iam_role.worker_node_role[0].arn, null)
+
+  worker_node_role_arn = local.use_existing_role ? local.existing_role_arn : local.new_role_arn
 }
 
-# ✅ 정책 연결 (Role을 새로 생성한 경우에만 연결)
+# ✅ 정책 연결 (Role을 새로 생성한 경우에만)
 resource "aws_iam_role_policy_attachment" "worker_node_policy" {
   count      = local.use_existing_role ? 0 : 1
   role       = aws_iam_role.worker_node_role[0].name
