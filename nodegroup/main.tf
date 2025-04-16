@@ -82,8 +82,8 @@ resource "aws_eks_node_group" "worker_group" {
   instance_types = ["t2.micro"]
 
   scaling_config {
-    desired_size = 2
-    max_size     = 3
+    desired_size = 1
+    max_size     = 1
     min_size     = 1
   }
 
