@@ -41,9 +41,9 @@ resource "aws_iam_role" "worker_node_role" {
   })
 }
 
-# ✅ 실제 사용할 Role의 ARN (삼항 연산자 제거 → 조건 분기된 두 개의 locals)
+# ✅ 실제 사용할 Role의 ARN (셋 → 리스트 변환 후 안전하게 인덱싱)
 locals {
-  existing_role_arn = try(data.aws_iam_roles.all_roles.arns[0], null)
+  existing_role_arn = try(tolist(data.aws_iam_roles.all_roles.arns)[0], null)
   new_role_arn      = try(aws_iam_role.worker_node_role[0].arn, null)
 
   worker_node_role_arn = local.use_existing_role ? local.existing_role_arn : local.new_role_arn
