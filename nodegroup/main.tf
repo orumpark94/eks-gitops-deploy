@@ -2,7 +2,7 @@ provider "aws" {
   region = "ap-northeast-2"
 }
 
-# ✅ 기존 subnet이 정의된 상태파일에서 ID 가져오기
+# ✅ 기존 VPC 상태에서 서브넷 ID 가져오기
 data "terraform_remote_state" "vpc" {
   backend = "s3"
   config = {
@@ -12,22 +12,20 @@ data "terraform_remote_state" "vpc" {
   }
 }
 
-# ✅ 모든 IAM Role 중 eks-worker-node-role이 존재하는지 조회
+# ✅ eks-worker-node-role 존재 여부 체크
 data "aws_iam_roles" "all_roles" {
   name_regex = "^eks-worker-node-role$"
 }
 
-# ✅ Role 존재 여부 판단
 locals {
   use_existing_role     = length(data.aws_iam_roles.all_roles.names) > 0
   worker_node_role_name = "eks-worker-node-role"
 }
 
-# ✅ Role 생성 (존재하지 않을 경우에만 생성)
+# ✅ IAM Role 생성 (존재하지 않을 경우)
 resource "aws_iam_role" "worker_node_role" {
   count = local.use_existing_role ? 0 : 1
-
-  name = local.worker_node_role_name
+  name  = local.worker_node_role_name
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -41,15 +39,13 @@ resource "aws_iam_role" "worker_node_role" {
   })
 }
 
-# ✅ 실제 사용할 Role의 ARN (셋 → 리스트 변환 후 안전하게 인덱싱)
 locals {
   existing_role_arn = try(tolist(data.aws_iam_roles.all_roles.arns)[0], null)
   new_role_arn      = try(aws_iam_role.worker_node_role[0].arn, null)
-
   worker_node_role_arn = local.use_existing_role ? local.existing_role_arn : local.new_role_arn
 }
 
-# ✅ 정책 연결 (Role을 새로 생성한 경우에만)
+# ✅ 필요한 정책 연결 (EKS + SSM)
 resource "aws_iam_role_policy_attachment" "worker_node_policy" {
   count      = local.use_existing_role ? 0 : 1
   role       = aws_iam_role.worker_node_role[0].name
@@ -68,28 +64,28 @@ resource "aws_iam_role_policy_attachment" "ecr_read_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# ✅ NodeGroup 정의
-resource "aws_eks_node_group" "worker_group" {
-  cluster_name    = "eks-gitops-cluster"
-  node_group_name = "worker-group"
-  node_role_arn   = local.worker_node_role_arn
+resource "aws_iam_role_policy_attachment" "ssm_policy" {
+  count      = local.use_existing_role ? 0 : 1
+  role       = aws_iam_role.worker_node_role[0].name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
 
-  subnet_ids = [
-    data.terraform_remote_state.vpc.outputs.public_subnet_a_id,
-    data.terraform_remote_state.vpc.outputs.public_subnet_c_id
-  ]
+# ✅ 인스턴스 프로파일
+resource "aws_iam_instance_profile" "worker_node_instance_profile" {
+  name = "eks-worker-instance-profile"
+  role = local.worker_node_role_name
+}
 
-  instance_types = ["t2.micro"]
-
-  scaling_config {
-    desired_size = 1
-    max_size     = 1
-    min_size     = 1
-  }
-
-  ami_type = "AL2_x86_64"
+# ✅ EC2 인스턴스 생성 (SSM 연결 전용, user_data 없음)
+resource "aws_instance" "eks_worker" {
+  ami                    = "ami-0ed99df77a82560e6"  # Amazon Linux 2 (EKS 호환)
+  instance_type          = "t2.micro"
+  subnet_id              = data.terraform_remote_state.vpc.outputs.public_subnet_a_id
+  iam_instance_profile   = aws_iam_instance_profile.worker_node_instance_profile.name
+  associate_public_ip_address = false   # ❗ 퍼블릭 IP 없이 생성 (내부 전용)
+  vpc_security_group_ids = [data.terraform_remote_state.vpc.outputs.default_security_group_id]
 
   tags = {
-    Name = "eks-worker-group"
+    Name = "eks-self-managed-worker"
   }
 }
