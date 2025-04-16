@@ -12,15 +12,20 @@ data "terraform_remote_state" "vpc" {
   }
 }
 
-# ✅ 모든 IAM Role 중 eks-worker-node-role이 존재하는지 조회
+# ✅ IAM Role 존재 여부 판단
 data "aws_iam_roles" "all_roles" {
   name_regex = "^eks-worker-node-role$"
 }
 
-# ✅ Role 존재 여부 판단
 locals {
   use_existing_role     = length(data.aws_iam_roles.all_roles.names) > 0
   worker_node_role_name = "eks-worker-node-role"
+}
+
+# ✅ 기존 Role의 ARN 조회
+data "aws_iam_role" "existing_worker_role" {
+  count = local.use_existing_role ? 1 : 0
+  name  = local.worker_node_role_name
 }
 
 # ✅ Role 생성 (존재하지 않을 경우에만 생성)
@@ -41,30 +46,29 @@ resource "aws_iam_role" "worker_node_role" {
   })
 }
 
-# ✅ 실제 사용할 Role의 ARN (셋 → 리스트 변환 후 안전하게 인덱싱)
+# ✅ 실제 사용할 Role의 ARN
 locals {
-  existing_role_arn = try(tolist(data.aws_iam_roles.all_roles.arns)[0], null)
-  new_role_arn      = try(aws_iam_role.worker_node_role[0].arn, null)
-
-  worker_node_role_arn = local.use_existing_role ? local.existing_role_arn : local.new_role_arn
+  existing_role_arn     = local.use_existing_role ? data.aws_iam_role.existing_worker_role[0].arn : null
+  new_role_arn          = local.use_existing_role ? null : aws_iam_role.worker_node_role[0].arn
+  worker_node_role_arn  = coalesce(local.existing_role_arn, local.new_role_arn)
 }
 
 # ✅ 정책 연결 (Role을 새로 생성한 경우에만)
 resource "aws_iam_role_policy_attachment" "worker_node_policy" {
   count      = local.use_existing_role ? 0 : 1
-  role       = aws_iam_role.worker_node_role[0].name
+  role       = local.worker_node_role_name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
 }
 
 resource "aws_iam_role_policy_attachment" "cni_policy" {
   count      = local.use_existing_role ? 0 : 1
-  role       = aws_iam_role.worker_node_role[0].name
+  role       = local.worker_node_role_name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
 }
 
 resource "aws_iam_role_policy_attachment" "ecr_read_policy" {
   count      = local.use_existing_role ? 0 : 1
-  role       = aws_iam_role.worker_node_role[0].name
+  role       = local.worker_node_role_name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
@@ -79,7 +83,7 @@ resource "aws_eks_node_group" "worker_group" {
     data.terraform_remote_state.vpc.outputs.public_subnet_c_id
   ]
 
-  instance_types = ["t2.micro"]
+  instance_types = ["t2.nano"]
 
   scaling_config {
     desired_size = 1
