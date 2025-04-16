@@ -12,7 +12,24 @@ data "terraform_remote_state" "vpc" {
   }
 }
 
-# ✅ 기본 Security Group 리소스 정의 (출력용으로만 사용)
+# ✅ 최신 EKS 1.28 노드용 AMI 자동 조회 (서울 리전)
+data "aws_ami" "eks_node" {
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["amazon-eks-node-1.28-v*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  owners = ["602401143452"] # EKS 공식 AMI 제공 계정
+}
+
+# ✅ 기본 Security Group 리소스 정의
 resource "aws_default_security_group" "default" {
   vpc_id = data.terraform_remote_state.vpc.outputs.vpc_id
 }
@@ -81,13 +98,13 @@ resource "aws_iam_instance_profile" "worker_node_instance_profile" {
   role = local.worker_node_role_name
 }
 
-# ✅ EC2 인스턴스 생성 (SSM 연결 전용, user_data 없음)
+# ✅ EC2 인스턴스 생성 (SSM 연결 전용)
 resource "aws_instance" "eks_worker" {
-  ami                         = "ami-0ed99df77a82560e6"  # Amazon Linux 2 (EKS 호환)
-  instance_type               = "t2.micro"
+  ami                         = data.aws_ami.eks_node.id  # ✅ 자동 조회된 AMI 사용
+  instance_type               = "t3.micro"
   subnet_id                   = data.terraform_remote_state.vpc.outputs.public_subnet_a_id
   iam_instance_profile        = aws_iam_instance_profile.worker_node_instance_profile.name
-  associate_public_ip_address = false   # ❗ 퍼블릭 IP 없이 생성 (내부 전용)
+  associate_public_ip_address = false   # 내부 전용 인스턴스
   vpc_security_group_ids      = [aws_default_security_group.default.id]
 
   tags = {
