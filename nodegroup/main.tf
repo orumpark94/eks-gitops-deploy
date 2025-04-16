@@ -12,21 +12,22 @@ data "terraform_remote_state" "vpc" {
   }
 }
 
-# ✅ 기존 IAM Role 조회 (존재할 경우)
-data "aws_iam_role" "existing_worker_role" {
-  name = "eks-worker-node-role"
-  # 존재하지 않으면 오류가 나므로, 아래 error_handling 기능 사용 필요 (Terraform >= 1.3 이상)
-  # optional
-  # lifecycle {
-  #   ignore_errors = true
-  # }
+# ✅ 모든 IAM Role 중 eks-worker-node-role이 존재하는지 조회
+data "aws_iam_roles" "all_roles" {
+  name_regex = "^eks-worker-node-role$"
+}
+
+# ✅ Role 존재 여부 판단
+locals {
+  use_existing_role     = length(data.aws_iam_roles.all_roles.names) > 0
+  worker_node_role_name = "eks-worker-node-role"
 }
 
 # ✅ Role 생성 (존재하지 않을 경우에만 생성)
 resource "aws_iam_role" "worker_node_role" {
-  count = can(data.aws_iam_role.existing_worker_role.arn) ? 0 : 1
+  count = local.use_existing_role ? 0 : 1
 
-  name = "eks-worker-node-role"
+  name = local.worker_node_role_name
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -40,28 +41,28 @@ resource "aws_iam_role" "worker_node_role" {
   })
 }
 
-# ✅ 실제 사용할 role의 ARN (기존 or 새로 생성된 것 중에서)
+# ✅ 실제 사용할 Role의 ARN (기존 or 새로 생성된 것 중에서)
 locals {
-  worker_node_role_arn = can(data.aws_iam_role.existing_worker_role.arn)
-    ? data.aws_iam_role.existing_worker_role.arn
+  worker_node_role_arn = local.use_existing_role
+    ? data.aws_iam_roles.all_roles.arns[0]
     : aws_iam_role.worker_node_role[0].arn
 }
 
-# ✅ 정책 연결 (조건부 리소스)
+# ✅ 정책 연결 (Role을 새로 생성한 경우에만 연결)
 resource "aws_iam_role_policy_attachment" "worker_node_policy" {
-  count      = can(data.aws_iam_role.existing_worker_role.arn) ? 0 : 1
+  count      = local.use_existing_role ? 0 : 1
   role       = aws_iam_role.worker_node_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
 }
 
 resource "aws_iam_role_policy_attachment" "cni_policy" {
-  count      = can(data.aws_iam_role.existing_worker_role.arn) ? 0 : 1
+  count      = local.use_existing_role ? 0 : 1
   role       = aws_iam_role.worker_node_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
 }
 
 resource "aws_iam_role_policy_attachment" "ecr_read_policy" {
-  count      = can(data.aws_iam_role.existing_worker_role.arn) ? 0 : 1
+  count      = local.use_existing_role ? 0 : 1
   role       = aws_iam_role.worker_node_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
