@@ -17,8 +17,7 @@ output "eks_node_group_name" {
   value = aws_eks_node_group.eks_node_group.node_group_name
 }
 
-# ✅ (선택) Node IAM Role ARN
+# ✅ (선택) Node IAM Role ARN (data로 변경됨)
 output "worker_node_role_arn" {
-  value = aws_iam_role.worker_node_role.arn
+  value = data.aws_iam_role.worker_node_role.arn
 }
-
