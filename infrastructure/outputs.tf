@@ -12,9 +12,8 @@ output "eks_cluster_endpoint" {
   value = aws_eks_cluster.eks_cluster.endpoint
 }
 
-# ✅ (선택) Node Group 이름
 output "eks_node_group_name" {
-  value = aws_eks_node_group.eks_node_group.node_group_name
+  value = var.create_nodegroup ? aws_eks_node_group.eks_node_group[0].node_group_name : "skipped"
 }
 
 # ✅ (선택) Node IAM Role ARN (data로 변경됨)
