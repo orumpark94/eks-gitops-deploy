@@ -2,7 +2,7 @@ provider "aws" {
   region = "ap-northeast-2"
 }
 
-# ✅ 기존 subnet이 정의된 상태파일에서 ID 가져오기
+# ✅ 기존 VPC 및 EKS 클러스터 상태 불러오기
 data "terraform_remote_state" "vpc" {
   backend = "s3"
   config = {
@@ -12,23 +12,26 @@ data "terraform_remote_state" "vpc" {
   }
 }
 
-# ✅ IAM Role 존재 여부 판단
-data "aws_iam_roles" "all_roles" {
-  name_regex = "^eks-worker-node-role$"
-}
-
+# ✅ Role 이름 및 존재 여부 체크
 locals {
-  use_existing_role     = length(data.aws_iam_roles.all_roles.names) > 0
   worker_node_role_name = "eks-worker-node-role"
 }
 
-# ✅ 기존 Role의 ARN 조회
+data "aws_iam_roles" "existing" {
+  name_regex = "^${local.worker_node_role_name}$"
+}
+
+locals {
+  use_existing_role = length(data.aws_iam_roles.existing.names) > 0
+}
+
+# ✅ 기존 Role의 ARN (존재 시만 조회)
 data "aws_iam_role" "existing_worker_role" {
   count = local.use_existing_role ? 1 : 0
   name  = local.worker_node_role_name
 }
 
-# ✅ Role 생성 (존재하지 않을 경우에만 생성)
+# ✅ Role 생성 (없을 때만 생성)
 resource "aws_iam_role" "worker_node_role" {
   count = local.use_existing_role ? 0 : 1
 
@@ -46,14 +49,7 @@ resource "aws_iam_role" "worker_node_role" {
   })
 }
 
-# ✅ 실제 사용할 Role의 ARN
-locals {
-  existing_role_arn     = local.use_existing_role ? data.aws_iam_role.existing_worker_role[0].arn : null
-  new_role_arn          = local.use_existing_role ? null : aws_iam_role.worker_node_role[0].arn
-  worker_node_role_arn  = coalesce(local.existing_role_arn, local.new_role_arn)
-}
-
-# ✅ 정책 연결 (Role을 새로 생성한 경우에만)
+# ✅ 필요한 정책 부착 (역할 새로 만든 경우만)
 resource "aws_iam_role_policy_attachment" "worker_node_policy" {
   count      = local.use_existing_role ? 0 : 1
   role       = local.worker_node_role_name
@@ -72,10 +68,24 @@ resource "aws_iam_role_policy_attachment" "ecr_read_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# ✅ NodeGroup 정의
-resource "aws_eks_node_group" "worker_group" {
-  cluster_name    = "eks-gitops-cluster"
-  node_group_name = "worker-group"
+resource "aws_iam_role_policy_attachment" "ssm_policy" {
+  count      = local.use_existing_role ? 0 : 1
+  role       = local.worker_node_role_name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# ✅ 최종적으로 사용할 Role ARN 선택
+locals {
+  worker_node_role_arn = coalesce(
+    try(data.aws_iam_role.existing_worker_role[0].arn, null),
+    try(aws_iam_role.worker_node_role[0].arn, null)
+  )
+}
+
+# ✅ Managed NodeGroup 생성
+resource "aws_eks_node_group" "worker_node_group" {
+  cluster_name    = data.terraform_remote_state.vpc.outputs.eks_cluster_name
+  node_group_name = "eks-managed-node-group"
   node_role_arn   = local.worker_node_role_arn
 
   subnet_ids = [
@@ -83,17 +93,19 @@ resource "aws_eks_node_group" "worker_group" {
     data.terraform_remote_state.vpc.outputs.public_subnet_c_id
   ]
 
-  instance_types = ["t2.nano"]
-
   scaling_config {
-    desired_size = 1
-    max_size     = 1
+    desired_size = 2
+    max_size     = 2
     min_size     = 1
   }
 
-  ami_type = "AL2_x86_64"
+  instance_types = ["t3.small"]
 
   tags = {
-    Name = "eks-worker-group"
+    Name = "eks-managed-node-group"
   }
+
+  depends_on = [
+    aws_iam_role.worker_node_role
+  ]
 }

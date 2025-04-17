@@ -65,13 +65,18 @@ data "aws_iam_role" "eks_cluster_role" {
   name = "eksClusterRole"
 }
 
-# ✅ 정책 연결 (필요 시)
+# ✅ 이미 존재하는 Worker Node용 IAM Role 참조 (예: eks-gitops-actions 사용자)
+data "aws_iam_role" "worker_node_role" {
+  name = "eks-gitops-actions"
+}
+
+# ✅ EKS Cluster용 정책 연결
 resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   role       = data.aws_iam_role.eks_cluster_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
 
-# ✅ EKS Cluster 생성
+# ✅ EKS 클러스터 생성
 resource "aws_eks_cluster" "eks_cluster" {
   name     = "eks-gitops-cluster"
   role_arn = data.aws_iam_role.eks_cluster_role.arn
@@ -81,9 +86,34 @@ resource "aws_eks_cluster" "eks_cluster" {
       aws_subnet.public_subnet_a.id,
       aws_subnet.public_subnet_c.id
     ]
+    security_group_ids = [aws_security_group.eks_worker_sg.id]
   }
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_cluster_policy
   ]
+}
+
+# ✅ EKS Node Group (1개, EC2 인스턴스 2개 포함)
+resource "aws_eks_node_group" "eks_node_group" {
+  cluster_name    = aws_eks_cluster.eks_cluster.name
+  node_group_name = "eks-node-group"
+  node_role_arn   = data.aws_iam_role.worker_node_role.arn
+
+  subnet_ids = [
+    aws_subnet.public_subnet_a.id,
+    aws_subnet.public_subnet_c.id
+  ]
+
+  scaling_config {
+    desired_size = 2
+    max_size     = 2
+    min_size     = 1
+  }
+
+  instance_types = ["t3.small"]
+
+  tags = {
+    Name = "eks-node-group"
+  }
 }
