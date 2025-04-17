@@ -2,6 +2,12 @@ provider "aws" {
   region = "ap-northeast-2"
 }
 
+# ✅ 변수 기반 NodeGroup 생성 조건
+variable "create_nodegroup" {
+  type    = bool
+  default = true
+}
+
 # ✅ VPC
 resource "aws_vpc" "eks_vpc" {
   cidr_block           = "10.0.0.0/16"
@@ -94,11 +100,12 @@ resource "aws_eks_cluster" "eks_cluster" {
   ]
 }
 
-# ✅ EKS Node Group (노드 2개 구성)
+# ✅ EKS Node Group (조건부 생성)
 resource "aws_eks_node_group" "eks_node_group" {
-  cluster_name    = aws_eks_cluster.eks_cluster.name
+  count         = var.create_nodegroup ? 1 : 0
+  cluster_name  = aws_eks_cluster.eks_cluster.name
   node_group_name = "eks-node-group"
-  node_role_arn   = data.aws_iam_role.worker_node_role.arn
+  node_role_arn = data.aws_iam_role.worker_node_role.arn
 
   subnet_ids = [
     aws_subnet.public_subnet_a.id,
@@ -116,6 +123,4 @@ resource "aws_eks_node_group" "eks_node_group" {
   tags = {
     Name = "eks-node-group"
   }
-
-  # 워커 노드 Role은 외부에서 관리되므로 depends_on 필요 없음
 }

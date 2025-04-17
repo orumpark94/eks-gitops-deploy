@@ -10,3 +10,8 @@ variable "cluster_name" {
 variable "cluster_role_name" {
   type = string
 }
+
+variable "create_nodegroup" {
+  type    = bool
+  default = true
+}
