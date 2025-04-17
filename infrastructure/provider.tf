@@ -1,6 +1,3 @@
-provider "aws" {
-  region = "ap-northeast-2"
-}
 
 data "aws_eks_cluster" "eks" {
   name = "eks-gitops-cluster"
