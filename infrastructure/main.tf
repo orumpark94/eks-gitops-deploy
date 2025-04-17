@@ -2,12 +2,6 @@ provider "aws" {
   region = "ap-northeast-2"
 }
 
-# ✅ 변수 기반 NodeGroup 생성 조건
-variable "create_nodegroup" {
-  type    = bool
-  default = true
-}
-
 # ✅ VPC
 resource "aws_vpc" "eks_vpc" {
   cidr_block           = "10.0.0.0/16"
