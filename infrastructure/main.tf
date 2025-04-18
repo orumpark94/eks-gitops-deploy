@@ -13,6 +13,29 @@ resource "aws_vpc" "eks_vpc" {
   }
 }
 
+# ✅ Internet Gateway (EC2가 인터넷에 나가기 위한 출구)
+resource "aws_internet_gateway" "eks_igw" {
+  vpc_id = aws_vpc.eks_vpc.id
+
+  tags = {
+    Name = "eks-igw"
+  }
+}
+
+# ✅ 퍼블릭용 Route Table (퍼블릭 서브넷이 인터넷과 통신 가능하게 함)
+resource "aws_route_table" "eks_public_rt" {
+  vpc_id = aws_vpc.eks_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.eks_igw.id
+  }
+
+  tags = {
+    Name = "eks-public-rt"
+  }
+}
+
 # ✅ 퍼블릭 서브넷 A (AZ: 2a)
 resource "aws_subnet" "public_subnet_a" {
   vpc_id            = aws_vpc.eks_vpc.id
