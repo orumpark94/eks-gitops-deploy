@@ -31,7 +31,7 @@ resource "aws_subnet" "public_subnet_c" {
   cidr_block        = "10.0.2.0/24"
   availability_zone = "ap-northeast-2c"
   map_public_ip_on_launch = true # ✅ 수정됨
-  
+
   tags = {
     Name = "eks-public-c"
   }
@@ -119,4 +119,17 @@ resource "aws_eks_node_group" "eks_node_group" {
   tags = {
     Name = "eks-node-group"
   }
+}
+
+# ✅ 클러스터 인증용 토큰 데이터
+data "aws_eks_cluster_auth" "cluster" {
+  name = aws_eks_cluster.eks_cluster.name
+}
+
+# ✅ Kubernetes Provider (Terraform이 클러스터에 연결되도록 함)
+provider "kubernetes" {
+  host                   = aws_eks_cluster.eks_cluster.endpoint
+  cluster_ca_certificate = base64decode(aws_eks_cluster.eks_cluster.certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.cluster.token
+  load_config_file       = false
 }

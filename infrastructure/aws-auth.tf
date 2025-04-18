@@ -17,5 +17,9 @@ resource "kubernetes_config_map" "aws_auth" {
     ])
   }
 
-  depends_on = [aws_eks_node_group.eks_node_group]
+  # ✅ EKS 클러스터와 NodeGroup이 완전히 생성된 후 실행되게 강제
+  depends_on = [
+    aws_eks_cluster.eks_cluster,
+    aws_eks_node_group.eks_node_group
+  ]
 }
