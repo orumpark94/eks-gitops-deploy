@@ -60,6 +60,18 @@ resource "aws_subnet" "public_subnet_c" {
   }
 }
 
+# ✅ 퍼블릭 서브넷 A와 퍼블릭 라우트 테이블 연결
+resource "aws_route_table_association" "public_a" {
+  subnet_id      = aws_subnet.public_subnet_a.id
+  route_table_id = aws_route_table.eks_public_rt.id
+}
+
+# ✅ 퍼블릭 서브넷 C와 퍼블릭 라우트 테이블 연결
+resource "aws_route_table_association" "public_c" {
+  subnet_id      = aws_subnet.public_subnet_c.id
+  route_table_id = aws_route_table.eks_public_rt.id
+}
+
 # ✅ EC2 워커 노드용 보안 그룹
 resource "aws_security_group" "eks_worker_sg" {
   name        = "eks-worker-sg"
