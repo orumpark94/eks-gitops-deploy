@@ -34,9 +34,10 @@ jobs:
 
       - name: Ensure S3 bucket exists for Terraform state
         run: |
+          set -x
           BUCKET_NAME="eks-gitops-tfstate-20250415"
           REGION="ap-northeast-2"
-          
+
           if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
             echo "✅ S3 bucket '$BUCKET_NAME' already exists."
           else
@@ -50,27 +51,41 @@ jobs:
 
       - name: Terraform Init
         working-directory: infrastructure/
-        run: terraform init
+        run: |
+          set -x
+          terraform init
 
       - name: Terraform Import aws-auth ConfigMap 🔧
         if: ${{ github.event.inputs.action == 'apply' }}
+        id: import_aws_auth
         working-directory: infrastructure/
         run: |
+          set -x
           echo "🔁 Attempting to import existing aws-auth ConfigMap..."
-          terraform import -input=false \
-            kubernetes_config_map.aws_auth kube-system/aws-auth || echo "ℹ️ Skipping import; already managed or doesn't exist."
+          if terraform import -input=false kubernetes_config_map.aws_auth kube-system/aws-auth; then
+            echo "import_success=true" >> $GITHUB_OUTPUT
+          else
+            echo "import_success=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
 
       - name: Terraform Plan
-        if: ${{ github.event.inputs.action == 'apply' }}
+        if: ${{ github.event.inputs.action == 'apply' && steps.import_aws_auth.outputs.import_success == 'true' }}
         working-directory: infrastructure/
-        run: terraform plan
+        run: |
+          set -x
+          terraform plan
 
       - name: Terraform Apply
-        if: ${{ github.event.inputs.action == 'apply' }}
+        if: ${{ github.event.inputs.action == 'apply' && steps.import_aws_auth.outputs.import_success == 'true' }}
         working-directory: infrastructure/
-        run: terraform apply -auto-approve
+        run: |
+          set -x
+          terraform apply -auto-approve
 
       - name: Terraform Destroy
         if: ${{ github.event.inputs.action == 'destroy' }}
         working-directory: infrastructure/
-        run: terraform destroy -auto-approve
+        run: |
+          set -x
+          terraform destroy -auto-approve
