@@ -55,29 +55,15 @@ jobs:
           set -x
           terraform init
 
-      - name: Terraform Import aws-auth ConfigMap 🔧
-        if: ${{ github.event.inputs.action == 'apply' }}
-        id: import_aws_auth
-        working-directory: infrastructure/
-        run: |
-          set -x
-          echo "🔁 Attempting to import existing aws-auth ConfigMap..."
-          if terraform import -input=false kubernetes_config_map.aws_auth kube-system/aws-auth; then
-            echo "import_success=true" >> $GITHUB_OUTPUT
-          else
-            echo "import_success=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-
       - name: Terraform Plan
-        if: ${{ github.event.inputs.action == 'apply' && steps.import_aws_auth.outputs.import_success == 'true' }}
+        if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: infrastructure/
         run: |
           set -x
           terraform plan
 
       - name: Terraform Apply
-        if: ${{ github.event.inputs.action == 'apply' && steps.import_aws_auth.outputs.import_success == 'true' }}
+        if: ${{ github.event.inputs.action == 'apply' }}
         working-directory: infrastructure/
         run: |
           set -x
