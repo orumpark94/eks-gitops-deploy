@@ -177,21 +177,3 @@ provider "kubernetes" {
   cluster_ca_certificate = base64decode(aws_eks_cluster.eks_cluster.certificate_authority[0].data)
   token                  = data.aws_eks_cluster_auth.cluster.token
 }
-
-# ✅ aws-auth ConfigMap (기존 값을 Terraform으로 가져오기)
-resource "kubernetes_config_map" "aws_auth" {
-  metadata {
-    name      = "aws-auth"
-    namespace = "kube-system"
-  }
-
-  data = {
-        mapRoles = <<YAML
-- groups:
-  - system:bootstrappers
-  - system:nodes
-  rolearn: arn:aws:iam::863676520919:role/eks-worker-node-role
-  username: system:node:{{EC2PrivateDNSName}}
-YAML
-  } 
-}
