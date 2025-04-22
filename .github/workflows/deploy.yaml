@@ -103,7 +103,7 @@ jobs:
           echo "📦 현재 aws-auth ConfigMap 내용:"
           kubectl get configmap aws-auth -n kube-system -o yaml
 
-                - name: Describe EKS Nodes
+      - name: Describe EKS Nodes
         if: ${{ github.event.inputs.action == 'data check' }}
         run: |
           echo "🔎 클러스터에 조인된 노드 확인 중..."
