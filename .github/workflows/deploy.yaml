@@ -102,3 +102,33 @@ jobs:
         run: |
           echo "📦 현재 aws-auth ConfigMap 내용:"
           kubectl get configmap aws-auth -n kube-system -o yaml
+
+                - name: Describe EKS Nodes
+        if: ${{ github.event.inputs.action == 'data check' }}
+        run: |
+          echo "🔎 클러스터에 조인된 노드 확인 중..."
+          kubectl get nodes -o wide || echo "❌ 노드 없음 또는 연결 실패"
+
+      - name: Check EC2 Node Instances
+        if: ${{ github.event.inputs.action == 'data check' }}
+        run: |
+          echo "🔍 EC2 인스턴스 상태 확인 중..."
+          aws ec2 describe-instances \
+            --filters "Name=tag:eks:nodegroup-name,Values=eks-node-group" \
+            --query "Reservations[].Instances[].{ID:InstanceId,State:State.Name,AZ:Placement.AvailabilityZone,PrivateIP:PrivateIpAddress}" \
+            --output table
+
+      - name: Fetch EC2 System Logs (최근 인스턴스 1개)
+        if: ${{ github.event.inputs.action == 'data check' }}
+        run: |
+          echo "🧾 EC2 시스템 로그 조회 (kubelet, bootstrap 문제 확인)"
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:eks:nodegroup-name,Values=eks-node-group" \
+            --query "Reservations[].Instances[0].InstanceId" \
+            --output text)
+
+          if [ "$INSTANCE_ID" != "None" ] && [ "$INSTANCE_ID" != "" ]; then
+            aws ec2 get-console-output --instance-id "$INSTANCE_ID" --output text
+          else
+            echo "❌ 인스턴스 없음, 시스템 로그 확인 불가"
+          fi
