@@ -12,6 +12,7 @@ on:
           - apply
           - destroy
           - data check
+          - import
 
 jobs:
   deploy:
@@ -51,11 +52,17 @@ jobs:
           fi
 
       - name: Terraform Init
-        if: ${{ github.event.inputs.action != 'data check' }}
         working-directory: infrastructure/
         run: |
           set -x
           terraform init
+
+      - name: Terraform Import aws-auth
+        if: ${{ github.event.inputs.action == 'import' }}
+        working-directory: infrastructure/
+        run: |
+          set -x
+          terraform import kubernetes_config_map.aws_auth kube-system/aws-auth
 
       - name: Terraform Plan
         if: ${{ github.event.inputs.action == 'apply' }}
