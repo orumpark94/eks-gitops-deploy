@@ -11,6 +11,7 @@ on:
         options:
           - apply
           - destroy
+          - data check
 
 jobs:
   deploy:
@@ -50,6 +51,7 @@ jobs:
           fi
 
       - name: Terraform Init
+        if: ${{ github.event.inputs.action != 'data check' }}
         working-directory: infrastructure/
         run: |
           set -x
@@ -75,3 +77,21 @@ jobs:
         run: |
           set -x
           terraform destroy -auto-approve
+
+      - name: Install kubectl
+        if: ${{ github.event.inputs.action == 'data check' }}
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      - name: Configure kubeconfig
+        if: ${{ github.event.inputs.action == 'data check' }}
+        run: |
+          aws eks update-kubeconfig --name eks-gitops-cluster --region ap-northeast-2
+
+      - name: Show aws-auth ConfigMap
+        if: ${{ github.event.inputs.action == 'data check' }}
+        run: |
+          echo "📦 현재 aws-auth ConfigMap 내용:"
+          kubectl get configmap aws-auth -n kube-system -o yaml
