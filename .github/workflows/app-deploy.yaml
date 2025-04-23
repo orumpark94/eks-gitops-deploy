@@ -1,0 +1,86 @@
+name: ArgoCD GitOps Install Roadmap
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "🔧 실행할 GitOps 단계 선택"
+        required: true
+        default: "install-argocd"
+        type: choice
+        options:
+          - install-argocd
+          - patch-admin-password
+          - apply-repo-secret
+          - create-argocd-project
+          - apply-argocd-application
+
+jobs:
+  argocd:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+
+      - name: Install kubectl and helm
+        run: |
+          KUBECTL_VERSION="v1.28.0"
+          curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Update kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --region ap-northeast-2 \
+            --name eks-gitops-cluster
+
+      - name: Step 1 - Install ArgoCD via Helm
+        if: ${{ github.event.inputs.step == 'install-argocd' }}
+        run: |
+          helm repo add argo https://argoproj.github.io/argo-helm
+          helm repo update
+          kubectl create namespace argocd || true
+          helm upgrade --install argocd argo/argo-cd \
+            --namespace argocd \
+            --set server.service.type=LoadBalancer
+
+      - name: Step 2 - Patch Admin Password
+        if: ${{ github.event.inputs.step == 'patch-admin-password' }}
+        run: |
+          kubectl apply -n argocd -f argocd/install/patch-admin-password.yaml
+
+      - name: Step 3 - Apply Git Repo Secret
+        if: ${{ github.event.inputs.step == 'apply-repo-secret' }}
+        run: |
+          kubectl create secret generic my-repo-creds \
+            -n argocd \
+            --type Opaque \
+            --from-literal=url=https://github.com/orumpark94/gitops-k8s-deploy.git \
+            --from-literal=username=orumpark94 \
+            --from-literal=password=${{ secrets.GIT_PAT_PASSWORD }} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Step 4 - Create ArgoCD Project
+        if: ${{ github.event.inputs.step == 'create-argocd-project' }}
+        run: |
+          kubectl apply -n argocd -f argocd/projects/default-project.yaml
+
+      - name: Step 5 - Apply ArgoCD Application
+        if: ${{ github.event.inputs.step == 'apply-argocd-application' }}
+        run: |
+          kubectl apply -n argocd -f argocd/applications/nginx.yaml
+
+      - name: Show ArgoCD Server Info
+        if: ${{ github.event.inputs.step == 'install-argocd' }}
+        run: |
+          echo "📡 ArgoCD 서버 External IP:"
+          kubectl get svc -n argocd argocd-server
