@@ -10,11 +10,10 @@ on:
         type: choice
         options:
           - install-argocd
-          - patch-admin-password
           - apply-repo-secret
           - create-argocd-project
           - apply-argocd-application
-          - apply-helm-chart    # ✅ 수동 Helm Chart 배포 옵션
+          - apply-helm-chart
 
 jobs:
   argocd:
@@ -44,29 +43,20 @@ jobs:
             --region ap-northeast-2 \
             --name eks-gitops-cluster
 
-      - name: Step 1 - Install ArgoCD via Helm
+      - name: Step 1 - Install ArgoCD via Helm (with known password)
         if: ${{ github.event.inputs.step == 'install-argocd' }}
         run: |
           helm repo add argo https://argoproj.github.io/argo-helm
           helm repo update
-          kubectl create namespace argocd || true
+          kubectl delete namespace argocd --ignore-not-found
+          sleep 20
+          kubectl create namespace argocd
           helm upgrade --install argocd argo/argo-cd \
             --namespace argocd \
-            --set server.service.type=LoadBalancer
+            --set server.service.type=LoadBalancer \
+            --set configs.secret.argocdServerAdminPassword='$2y$10$VJjXB6l2y/fZyRlgW3RhG.2a6HMYdM6WCSmTGUQEyB0MZqkeZgOwK'
 
-      - name: Step 2 - Reset Admin Password (Delete + Apply + Restart)
-        if: ${{ github.event.inputs.step == 'patch-admin-password' }}
-        run: |
-          echo "🗑️ Deleting old admin password secret..."
-          kubectl delete secret argocd-initial-admin-secret -n argocd || true
-
-          echo "📄 Applying new password secret..."
-          kubectl apply -f argocd/install/patch-admin-password.yaml
-
-          echo "🔁 Restarting ArgoCD server..."
-          kubectl -n argocd rollout restart deployment argocd-server
-
-      - name: Step 3 - Apply Git Repo Secret
+      - name: Step 2 - Apply Git Repo Secret
         if: ${{ github.event.inputs.step == 'apply-repo-secret' }}
         run: |
           kubectl create secret generic my-repo-creds \
@@ -77,17 +67,17 @@ jobs:
             --from-literal=password=${{ secrets.GIT_PAT_PASSWORD }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Step 4 - Create ArgoCD Project
+      - name: Step 3 - Create ArgoCD Project
         if: ${{ github.event.inputs.step == 'create-argocd-project' }}
         run: |
           kubectl apply -n argocd -f argocd/projects/default-project.yaml
 
-      - name: Step 5 - Apply ArgoCD Application
+      - name: Step 4 - Apply ArgoCD Application
         if: ${{ github.event.inputs.step == 'apply-argocd-application' }}
         run: |
           kubectl apply -n argocd -f argocd/applications/nginx.yaml
 
-      - name: Step 6 - Apply Helm Chart Directly (수동 배포용)
+      - name: Step 5 - Apply Helm Chart Directly (수동 배포용)
         if: ${{ github.event.inputs.step == 'apply-helm-chart' }}
         run: |
           helm upgrade --install nginx ./helm/nginx \
