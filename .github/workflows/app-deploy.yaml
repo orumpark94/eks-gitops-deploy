@@ -14,7 +14,7 @@ on:
           - apply-repo-secret
           - create-argocd-project
           - apply-argocd-application
-          - apply-helm-chart    # ✅ 수동 Helm Chart 배포 옵션 추가됨
+          - apply-helm-chart    # ✅ 수동 Helm Chart 배포 옵션
 
 jobs:
   argocd:
@@ -54,10 +54,17 @@ jobs:
             --namespace argocd \
             --set server.service.type=LoadBalancer
 
-      - name: Step 2 - Patch Admin Password
+      - name: Step 2 - Reset Admin Password (Delete + Apply + Restart)
         if: ${{ github.event.inputs.step == 'patch-admin-password' }}
         run: |
-          kubectl apply -n argocd -f argocd/install/patch-admin-password.yaml
+          echo "🗑️ Deleting old admin password secret..."
+          kubectl delete secret argocd-initial-admin-secret -n argocd || true
+
+          echo "📄 Applying new password secret..."
+          kubectl apply -f argocd/install/patch-admin-password.yaml
+
+          echo "🔁 Restarting ArgoCD server..."
+          kubectl -n argocd rollout restart deployment argocd-server
 
       - name: Step 3 - Apply Git Repo Secret
         if: ${{ github.event.inputs.step == 'apply-repo-secret' }}
