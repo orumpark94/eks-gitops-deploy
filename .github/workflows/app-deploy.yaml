@@ -14,6 +14,7 @@ on:
           - apply-repo-secret
           - create-argocd-project
           - apply-argocd-application
+          - apply-helm-chart    # ✅ 수동 Helm Chart 배포 옵션 추가됨
 
 jobs:
   argocd:
@@ -56,7 +57,6 @@ jobs:
       - name: Step 2 - Patch Admin Password
         if: ${{ github.event.inputs.step == 'patch-admin-password' }}
         run: |
-          # 필요 시 wait 또는 sleep 추가 가능
           kubectl apply -n argocd -f argocd/install/patch-admin-password.yaml
 
       - name: Step 3 - Apply Git Repo Secret
@@ -79,6 +79,13 @@ jobs:
         if: ${{ github.event.inputs.step == 'apply-argocd-application' }}
         run: |
           kubectl apply -n argocd -f argocd/applications/nginx.yaml
+
+      - name: Step 6 - Apply Helm Chart Directly (수동 배포용)
+        if: ${{ github.event.inputs.step == 'apply-helm-chart' }}
+        run: |
+          helm upgrade --install nginx ./helm/nginx \
+            --namespace default \
+            --create-namespace
 
       - name: Show ArgoCD Server Info
         if: ${{ github.event.inputs.step == 'install-argocd' }}
