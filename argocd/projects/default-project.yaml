@@ -1,12 +1,15 @@
-# argocd/projects/default-project.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: default
   namespace: argocd
 spec:
+  description: 기본 ArgoCD 프로젝트
+  sourceRepos:
+    - '*'  # 모든 Git repo 허용 (보안상 제약 가능)
   destinations:
     - namespace: '*'
-      server: https://kubernetes.default.svc
-  sourceRepos:
-    - '*'
+      server: '*'  # 모든 클러스터 목적지 허용
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
